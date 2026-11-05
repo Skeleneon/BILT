@@ -3,26 +3,38 @@ import imaplib
 import os
 from email.header import decode_header
 from pypdf import PdfReader
+from dotenv import load_dotenv
+import re
+import requests
+
+load_dotenv()
 
 # Configuration (Use GitHub Secrets for these!)
 EMAIL = os.environ.get("MAIL_USER")
 PASSWORD = os.environ.get("MAIL_PASS")
-IMAP_SERVER = "imap.gmail.com"  # Change if using Outlook/Yahoo
 
-"""
+cookies={
+  "d": os.environ.get("SLACK_D"),
+  "d-s": os.environ.get("SLACK_DS")
+}
+
+ 
+IMAP_SERVER = "imap.gmail.com" 
+
 def clean_filename(filename):
-  return "".join(c for c in filename if c.isalnum() or c.- in ("._- ")).rstrip()
-"""
+  return ("".join(c for c in filename if c.isalnum() or ("._- ") in c).rstrip()).rstrip(".pdf")+".pdf"
+
 
 def process_emails():
-  # Connect to email server
   mail = imaplib.IMAP4_SSL(IMAP_SERVER)
   mail.login(EMAIL, PASSWORD)
-  mail.select("inbox")
+  mail.select('"Slack Emails"')
+  print("Connected to mailbox.")
 
   # Search for specific emails (e.g., Unread emails from a sender or with a subject)
   # Modify search criteria as needed: '(UNSEEN FROM "sender@example.com")'
-  status, messages = mail.search(None, '(UNSEEN SUBJECT "PDF Report")')
+  status, messages = mail.search(None,'(HEADER Subject "jsaenz14 mentioned everyone")')
+  print("Status:", status)
 
   if status != "OK":
     print("No matching emails found.")
@@ -47,32 +59,61 @@ def process_emails():
 
         print(f"Processing email: {subject}")
 
-        # Walk through email parts to find attachments
+
+
+        body_content = ""
         for part in msg.walk():
+          print(f"Processing part: {part.get_content_type()}")
           if part.get_content_maintype() == "multipart":
+            print("Skipping multipart part.")
             continue
-          if part.get("Content-Disposition") is None:
+
+          if part.get_content_type() in ["text/plain", "text/html"]:
+            try:
+              payload = part.get_payload(decode=True)
+              if payload:
+                body_content += payload.decode("utf-8", errors="ignore")
+            except Exception:
+              pass
+
+        pdf_links = re.findall(r'https?://[^\s<>"]+?\.pdf[^\s<>"]*', body_content)
+
+          
+        html_links = re.findall(r'href="(https?://[^"]+)"', body_content)
+        slack_pdf_links = [link for link in html_links if "pdf" in link.lower()]
+
+        
+        all_links = set(pdf_links + slack_pdf_links)
+
+        for link in all_links:
+          print(f"Found PDF link: {link}")
+      
+          try:
+            print(f"Downloading from: {link}")
+            response = requests.get(link, timeout=30, cookies=cookies)
+            response.raise_for_status()
+
+            # Determine filename from URL
+            filename = link.split("/")[-1].split("?")[0]
+            if not filename.endswith(".pdf"):
+              filename = "schedule.pdf"
+
+            # 1. Save temporarily to read it
+            with open("downloaded_pdfs/" + filename, "wb") as f:
+              print(response.content)
+              f.write(response.content)
+
+          except Exception as e:
+            print(f"Failed to download {link}: {e}")
             continue
 
-          filename = part.get_filename()
-          if filename:
-            decoded_header = decode_header(filename)[0]
-            if isinstance(decoded_header[0], bytes):
-              filename = decoded_header[0].decode(
-                  decoded_header[1] or "utf-8"
-              )
-            else:
-              filename = decoded_header[0]
+          mail.logout()
 
-            if filename.lower().endswith(".pdf"):
-              safe_name = clean_filename(filename)
-              pdf_path = os.path.join("downloaded_pdfs", safe_name)
+          return
 
-              # Save PDF attachment
-              with open(pdf_path, "wb") as f:
-                f.write(part.get_payload(decode=True))
-              print(f"Downloaded: {safe_name}")
 
+
+"""
               # Convert PDF to Text
               reader = PdfReader(pdf_path)
               text_content = ""
@@ -89,8 +130,8 @@ def process_emails():
     # Optional: Mark email as read so it isn't processed twice next time
     mail.store(num, "+FLAGS", "\\Seen")
 
-  mail.logout()
-
+ 
+"""
 
 if __name__ == "__main__":
   process_emails()
