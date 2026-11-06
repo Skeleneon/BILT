@@ -298,8 +298,11 @@ def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus",
   if not sa_json:
     print("Error: GCP_SA_KEY not found in .env file.")
     return
+  print(f"DEBUG: GCP_SA_KEY length is {len(sa_json) if sa_json else 'None/Empty'}")
 
   sa_info = json.loads(sa_json)
+  
+  
   creds = service_account.Credentials.from_service_account_info(
         sa_info, scopes=["https://www.googleapis.com/auth/calendar"]
     )
