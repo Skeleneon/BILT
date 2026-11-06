@@ -55,7 +55,6 @@ def process_emails():
     print("No matching emails found.")
     return
 
-  os.makedirs("extracted_texts", exist_ok=True)
   os.makedirs("downloaded_pdfs", exist_ok=True)
 
   for num in messages[0].split():
@@ -108,10 +107,22 @@ def process_emails():
   pdfs = []
   open("processed.txt", "a").close()
 
+  with open("processed.txt", "r") as f:
+    processed_files = f.read().splitlines()
+    global processed
+    processed = []
+    for i in processed_files:
+      processed.append(i.split("$@$"))
+
   # download PDFs
 
   for link in all_links:
-    print(f"Found PDF link: {link}")
+    for i in processed:
+      if link in i:
+        print(f"Already processed: {link}")
+        continue
+      else:
+        print(f"Found PDF link: {link}")
       
     try:
       print(f"Downloading from: {link}")
@@ -137,15 +148,14 @@ def process_emails():
   shifts = {"Sunday":[], "Monday":[], "Tuesday":[], "Wednesday":[], "Thursday":[], "Friday":[], "Saturday":[]}
 
   #Pull Shift from PDF
+
+
+
     
   for pdf_fname in pdfs:
     print("Pulling schedule from PDF:", pdf_fname)
 
-    with open("processed.txt", "r") as f:
-      processed_files = f.read().splitlines()
-      processed = []
-      for i in processed_files:
-        processed.append(i.split("$@$"))
+
 
     pdf_path = os.path.join("downloaded_pdfs", pdf_fname)
     with pdfplumber.open(pdf_path) as pdf:
@@ -161,6 +171,14 @@ def process_emails():
         week_end_date = datetime.strptime(week_end_str, "%m/%d/%Y")
         print(f"Found week start date: {week_start_str}")
         print(f"Found week end date: {week_end_str}")
+
+        for i in processed:
+          if f"{week_start_str}-{week_end_str}" == i[1]:
+            print(f"Already processed schedule for {week_start_str}-{week_end_str}, deleting old set")
+            delete_work_events_in_range(week_start_str, week_end_str)
+            
+
+         
 
 
       else:
@@ -214,42 +232,50 @@ def process_emails():
 
   
 
-  cleaned_shifts = {}
-  shift_times = []
+    cleaned_shifts = {}
+    shift_times = []
 
-    # Shifts cleanup
-  for shift in shifts:
-    if shifts[shift]:
-      shift_times = shifts[shift].copy()
-    
-      needs_cleanup = True
-      while len(shift_times)>1 and needs_cleanup:
-        
-        for i in range(len(shift_times)-1):
-          if shift_times[i][1] == shift_times[i+1][0]:
-            temp = [shift_times[i][0],shift_times[i+1][1]]
-            shift_times.insert(i,temp)
-            a=shift_times.pop(i+1)
-            a=shift_times.pop(i+1)
-            for i in range(len(shift_times)-1):
-              if shift_times[i][1] == shift_times[i+1][0]:
-                needs_cleanup = True
-                break
-              else:
-                needs_cleanup = False
-            break
-      cleaned_shifts[shift] = shift_times    
+      # Shifts cleanup
+    for shift in shifts:
+      if shifts[shift]:
+        shift_times = shifts[shift].copy()
+      
+        needs_cleanup = True
+        while len(shift_times)>1 and needs_cleanup:
           
+          for i in range(len(shift_times)-1):
+            if shift_times[i][1] == shift_times[i+1][0]:
+              temp = [shift_times[i][0],shift_times[i+1][1]]
+              shift_times.insert(i,temp)
+              a=shift_times.pop(i+1)
+              a=shift_times.pop(i+1)
+              for i in range(len(shift_times)-1):
+                if shift_times[i][1] == shift_times[i+1][0]:
+                  needs_cleanup = True
+                  break
+                else:
+                  needs_cleanup = False
+              break
+        cleaned_shifts[shift] = shift_times    
+            
+    
   
- 
-  cleaned_shifts["week_start"] = week_start_str
-  cleaned_shifts["week_end"] = week_end_str
+    cleaned_shifts["week_start"] = week_start_str
+    cleaned_shifts["week_end"] = week_end_str
 
+    with open("processed.txt", "a") as f:
+      for pdf_fname in pdfs:
+        f.write(f"{link}$@${week_start_str}-{week_end_str}\n")
 
+    mail.logout() 
+    print(cleaned_shifts)
 
-  mail.logout() 
-  print(cleaned_shifts)
-  return cleaned_shifts
+    schedule_shifts(cleaned_shifts)
+    cleaned_shifts.clear()
+    shifts.clear()
+    shift_times.clear()
+    os.remove(pdf_path)
+
 
 
 def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus", event_description="Testing automated calendar sync locally",event_start_time=None, event_end_time=None):
@@ -287,7 +313,8 @@ def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus",
 
 
 
-def delete_work_events_in_range(start_datetime, end_datetime, query_name="Work"):
+
+def delete_work_events_in_range(start_date_str, end_date_str, query_name="Work"):
   sa_json = os.environ.get("GCP_SA_KEY")
   if not sa_json:
     print("Error: GCP_SA_KEY not found.")
@@ -302,6 +329,8 @@ def delete_work_events_in_range(start_datetime, end_datetime, query_name="Work")
   calendar_id = (
       "e3fa2d7675fd0c62ef9ce956566f231744af375978008992f9b15b8f27a92939@group.calendar.google.com"
   )
+  start_datetime = datetime.strptime(start_date_str, "%m/%d/%Y")
+  end_datetime = datetime.strptime(end_date_str, "%m/%d/%Y")
 
   # Format datetimes to ISO format strings with timezone offset
   time_min = start_datetime.isoformat() + "-07:00"
@@ -340,8 +369,8 @@ def delete_work_events_in_range(start_datetime, end_datetime, query_name="Work")
     print(f"Deleted event: '{summary}' (Scheduled for {start_time})")
 
 
-def schedule_shifts():
-  shifts = process_emails()
+def schedule_shifts(shift):
+  shifts = shift
   day_offsets = {
         "Monday": 0,
         "Tuesday": 1,
@@ -380,4 +409,4 @@ def schedule_shifts():
 
 
 if __name__ == "__main__":
-  
+  process_emails()
