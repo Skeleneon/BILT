@@ -7,6 +7,11 @@ from pypdf import PdfReader
 from dotenv import load_dotenv
 import re
 import requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from tomlkit import datetime
+import json
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -101,6 +106,7 @@ def process_emails():
   all_links = set(pdf_links + slack_pdf_links)
 
   pdfs = []
+  open("processed.txt", "a").close()
 
   # download PDFs
 
@@ -134,8 +140,34 @@ def process_emails():
     
   for pdf_fname in pdfs:
     print("Pulling schedule from PDF:", pdf_fname)
+
+    with open("processed.txt", "r") as f:
+      processed_files = f.read().splitlines()
+      processed = []
+      for i in processed_files:
+        processed.append(i.split("$@$"))
+
     pdf_path = os.path.join("downloaded_pdfs", pdf_fname)
     with pdfplumber.open(pdf_path) as pdf:
+
+      first_page_text = pdf.pages[0].extract_text()
+      match = re.search(r"For the period of (\d{1,2}/\d{1,2}/\d{4})\s+to\s+(\d{1,2}/\d{1,2}/\d{4})", first_page_text)
+
+      if match:
+        week_start_str = match.group(1)  # e.g., "11/2/2026"
+        week_end_str = match.group(2)  # e.g., "11/8/2026"
+
+        week_start_date = datetime.strptime(week_start_str, "%m/%d/%Y")
+        week_end_date = datetime.strptime(week_end_str, "%m/%d/%Y")
+        print(f"Found week start date: {week_start_str}")
+        print(f"Found week end date: {week_end_str}")
+
+
+      else:
+        print("Warning: Could not find schedule period header, skipping file.")
+        continue
+
+
       for page_num, page in enumerate(pdf.pages, 1):
         table = page.extract_table()
         if not table:continue
@@ -189,20 +221,16 @@ def process_emails():
   for shift in shifts:
     if shifts[shift]:
       shift_times = shifts[shift].copy()
-      print(shift_times)
+    
       needs_cleanup = True
       while len(shift_times)>1 and needs_cleanup:
-        print("loop")
+        
         for i in range(len(shift_times)-1):
           if shift_times[i][1] == shift_times[i+1][0]:
             temp = [shift_times[i][0],shift_times[i+1][1]]
-            print(temp)
             shift_times.insert(i,temp)
-            print(shift_times)
-            shift_times.pop(i+1)
-            print(shift_times)
-            shift_times.pop(i+1)
-            print(shift_times)
+            a=shift_times.pop(i+1)
+            a=shift_times.pop(i+1)
             for i in range(len(shift_times)-1):
               if shift_times[i][1] == shift_times[i+1][0]:
                 needs_cleanup = True
@@ -212,11 +240,144 @@ def process_emails():
             break
       cleaned_shifts[shift] = shift_times    
           
-      
-      
+  
+ 
+  cleaned_shifts["week_start"] = week_start_str
+  cleaned_shifts["week_end"] = week_end_str
 
 
-  mail.logout()  
+
+  mail.logout() 
+  print(cleaned_shifts)
+  return cleaned_shifts
+
+
+def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus", event_description="Testing automated calendar sync locally",event_start_time=None, event_end_time=None):
+  sa_json = os.environ.get("GCP_SA_KEY")
+  if not sa_json:
+    print("Error: GCP_SA_KEY not found in .env file.")
+    return
+
+  sa_info = json.loads(sa_json)
+  creds = service_account.Credentials.from_service_account_info(
+        sa_info, scopes=["https://www.googleapis.com/auth/calendar"]
+    )
+  service = build("calendar", "v3", credentials=creds)
+
+  
+  dt_start = datetime.now() if not event_start_time else event_start_time
+  dt_end = dt_start + timedelta(hours=1) if not event_end_time else event_end_time
+  
+
+  event = {
+      "summary": event_name,
+      "location": event_location,
+      "description": event_description,
+      "start": {"dateTime": dt_start.isoformat(), "timeZone": "America/Phoenix"},
+      "end": {"dateTime": dt_end.isoformat(), "timeZone": "America/Phoenix"},
+  }
+
+  # 4. Push to primary calendar (or substitute your calendar email if needed)
+  created_event = (
+      service.events().insert(
+        calendarId="e3fa2d7675fd0c62ef9ce956566f231744af375978008992f9b15b8f27a92939@group.calendar.google.com",
+          body=event).execute()
+  )
+  print(f"Success! Event created")
+
+
+
+def delete_work_events_in_range(start_datetime, end_datetime, query_name="Work"):
+  sa_json = os.environ.get("GCP_SA_KEY")
+  if not sa_json:
+    print("Error: GCP_SA_KEY not found.")
+    return
+
+  sa_info = json.loads(sa_json)
+  creds = service_account.Credentials.from_service_account_info(
+      sa_info, scopes=["https://www.googleapis.com/auth/calendar"]
+  )
+  service = build("calendar", "v3", credentials=creds)
+
+  calendar_id = (
+      "e3fa2d7675fd0c62ef9ce956566f231744af375978008992f9b15b8f27a92939@group.calendar.google.com"
+  )
+
+  # Format datetimes to ISO format strings with timezone offset
+  time_min = start_datetime.isoformat() + "-07:00"
+  time_max = end_datetime.isoformat() + "-07:00"
+
+  # 1. List events using BOTH time window and text query filters
+  events_result = (
+      service.events()
+      .list(
+          calendarId=calendar_id,
+          q=query_name,  # Limits results to events containing this name (e.g., "Work")
+          timeMin=time_min,  # Start of the range
+          timeMax=time_max,  # End of the range
+          singleEvents=True,
+          orderBy="startTime",
+      )
+      .execute()
+  )
+
+  events = events_result.get("items", [])
+
+  if not events:
+    print(
+        f"No events matching '{query_name}' found between {start_datetime} and"
+        f" {end_datetime}."
+    )
+    return
+
+  # 2. Loop through matches and delete them
+  for event in events:
+    event_id = event["id"]
+    summary = event.get("summary", "No Title")
+    start_time = event["start"].get("dateTime", event["start"].get("date"))
+
+    service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+    print(f"Deleted event: '{summary}' (Scheduled for {start_time})")
+
+
+def schedule_shifts():
+  shifts = process_emails()
+  day_offsets = {
+        "Monday": 0,
+        "Tuesday": 1,
+        "Wednesday": 2,
+        "Thursday": 3,
+        "Friday": 4,
+        "Saturday": 5,
+        "Sunday": 6,
+    }
+
+  # Parse the base week start date once
+  week_start_date = datetime.strptime(shifts["week_start"], "%m/%d/%Y")
+
+  for day, offset in day_offsets.items():
+    if shifts.get(day):
+      # Calculate the exact date for this specific day of the week
+      current_day_date = week_start_date + timedelta(days=offset)
+      date_str = current_day_date.strftime("%m/%d/%Y")
+
+      for shift in shifts[day]:
+        start_time = datetime.strptime(
+            f"{date_str} {shift[0]}", "%m/%d/%Y %I:%M %p"
+        )
+        end_time = datetime.strptime(
+            f"{date_str} {shift[1]}", "%m/%d/%Y %I:%M %p"
+        )
+
+        add_to_calendar(
+            event_name="Work",
+            event_location="Downtown Phoenix Campus - UCENT 267",
+            event_description="Automated calendar sync for work shifts.",
+            event_start_time=start_time,
+            event_end_time=end_time,
+        )
+
+
 
 if __name__ == "__main__":
-  process_emails()
+  
