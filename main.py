@@ -16,12 +16,12 @@ from datetime import datetime, timedelta
 load_dotenv()
 
 
-EMAIL = os.environ.get("MAIL_USER")
-PASSWORD = os.environ.get("MAIL_PASS")
+EMAIL = os.environ.get("MAIL_USER").strip()
+PASSWORD = os.environ.get("MAIL_PASS").strip()
 
 cookies={
-  "d": os.environ.get("SLACK_D"),
-  "d-s": os.environ.get("SLACK_DS")
+  "d": os.environ.get("SLACK_D").strip(),
+  "d-s": os.environ.get("SLACK_DS").strip()
 }
 
 
@@ -125,7 +125,7 @@ def process_emails():
         print(f"Already processed: {link}")
         cont = True
         break
-      
+
     if cont:
       continue
       
