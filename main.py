@@ -98,11 +98,13 @@ def process_emails():
           
         html_links = re.findall(r'href="(https?://[^"]+)"', body_content)
         slack_pdf_links = [link for link in html_links if "pdf" in link.lower()]
+        print("found link") if slack_pdf_links else print()
 
  
 
         
   all_links = set(pdf_links + slack_pdf_links)
+  print(all_links)
 
   pdfs = []
   open("processed.txt", "a").close()
@@ -115,23 +117,26 @@ def process_emails():
       processed.append(i.split("$@$"))
 
   # download PDFs
-
+  
   for link in all_links:
+    cont = False
     for i in processed:
       if link in i:
         print(f"Already processed: {link}")
-        continue
-      else:
-        print(f"Found PDF link: {link}")
+        cont = True
+        break
       
+    if cont:
+      continue
+      
+    print(f"Found PDF link: {link}")
     try:
       print(f"Downloading from: {link}")
       response = requests.get(link, timeout=30, cookies=cookies)
       response.raise_for_status()
-  
       filename = link.split("/")[-1].split("?")[0]
 
-      
+          
       with open("downloaded_pdfs/" + filename, "wb") as f:
         f.write(response.content)
         pdfs.append(filename)
@@ -140,6 +145,8 @@ def process_emails():
     except Exception as e:
       print(f"Failed to download {link}: {e}")
       continue
+
+      
 
     
 
@@ -150,6 +157,9 @@ def process_emails():
   #Pull Shift from PDF
 
 
+  if not pdfs:
+    print("No new schedules found")
+    return
 
     
   for pdf_fname in pdfs:

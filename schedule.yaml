@@ -1,0 +1,36 @@
+name: Sync Work Schedule
+
+on:
+  # 1. Automatic Cron Trigger (e.g., runs every day at 8:00 AM UTC)
+  schedule:
+    - cron: '0 8 * * *'
+
+  # 2. Manual Trigger (Lets you click "Run workflow" from GitHub or your phone instantly)
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pdfplumber requests google-api-python-client google-auth
+
+      - name: Run schedule automation script
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          SLACK_D: ${{ secrets.SLACK_D }}
+          SLACK_DS: ${{ secrets.SLACK_DS }}
+        run: |
+          python main.py
