@@ -294,7 +294,7 @@ def process_emails():
 
 
 def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus", event_description="Testing automated calendar sync locally",event_start_time=None, event_end_time=None):
-  sa_json = os.environ.get("GCP_SA_KEY")
+  sa_json = os.environ.get("GCP_SA_KEY").strip().strip('"').strip("'")
   if not sa_json:
     print("Error: GCP_SA_KEY not found in .env file.")
     return
