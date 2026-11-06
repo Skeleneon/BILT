@@ -182,10 +182,15 @@ def process_emails():
         print(f"Found week start date: {week_start_str}")
         print(f"Found week end date: {week_end_str}")
 
-        for i in processed:
-          if f"{week_start_str}-{week_end_str}" == i[1]:
-            print(f"Already processed schedule for {week_start_str}-{week_end_str}, deleting old set")
-            delete_work_events_in_range(week_start_str, week_end_str)
+        try:
+          if processed[0][0]:
+            for i in processed:
+              if f"{week_start_str}-{week_end_str}" == i[1]:
+                print(f"Already processed schedule for {week_start_str}-{week_end_str}, deleting old set")
+                delete_work_events_in_range(week_start_str, week_end_str)
+        except Exception as e:
+          print(f"Error checking processed schedules: {e}")
+          pass
             
 
          
