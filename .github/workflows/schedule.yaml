@@ -34,3 +34,18 @@ jobs:
           SLACK_DS: ${{ secrets.SLACK_DS }}
         run: |
           python main.py
+
+      - name: Commit and push tracking file changes
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+         
+          git status
+          
+          
+          git add processed.txt
+          
+         
+          git commit -m "Auto-update schedule tracking state [skip ci]" || echo "No changes to commit"
+          git push
