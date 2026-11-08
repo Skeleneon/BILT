@@ -183,7 +183,8 @@ def process_emails():
         print(f"Found week end date: {week_end_str}")
 
         try:
-          if processed[0][0]:
+
+          if processed:
             for i in processed:
               if f"{week_start_str}-{week_end_str}" == i[1]:
                 print(f"Already processed schedule for {week_start_str}-{week_end_str}, deleting old set")
@@ -294,12 +295,14 @@ def process_emails():
 
 
 def add_to_calendar(event_name="Test", event_location="Downtown Pheonix Campus", event_description="Testing automated calendar sync locally",event_start_time=None, event_end_time=None):
-  sa_json = os.environ.get("GCP_SA_KEY").strip().strip('"').strip("'")
+  sa_json = os.environ.get("GCP_SA_KEY").strip().strip('"').strip("'").strip("\n")
   if not sa_json:
     print("Error: GCP_SA_KEY not found in .env file.")
     return
-  print(f"DEBUG: GCP_SA_KEY length is {len(sa_json) if sa_json else 'None/Empty'}")
 
+
+
+ 
   sa_info = json.loads(sa_json)
   
   
@@ -402,6 +405,7 @@ def schedule_shifts(shift):
   # Parse the base week start date once
   week_start_date = datetime.strptime(shifts["week_start"], "%m/%d/%Y")
 
+  delete_work_events_in_range(shifts["week_start"], shifts["week_end"])
   for day, offset in day_offsets.items():
     if shifts.get(day):
       # Calculate the exact date for this specific day of the week
