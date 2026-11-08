@@ -3,7 +3,7 @@ name: Sync Work Schedule
 on:
   # 1. Automatic Cron Trigger (e.g., runs every day at 8:00 AM UTC)
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 */6 * * *'
 
   # 2. Manual Trigger (Lets you click "Run workflow" from GitHub or your phone instantly)
   workflow_dispatch:
