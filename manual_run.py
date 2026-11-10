@@ -103,6 +103,7 @@ def process_emails():
     cont = False
     for i in processed:
       if link in i:
+        print(link)
         print(f"Already processed: {link}")
         cont = True
         break
@@ -268,10 +269,10 @@ def process_emails():
     cleaned_shifts["week_start"] = week_start_str
     cleaned_shifts["week_end"] = week_end_str
 
-    print("WRITE: "+f"{curr_link}$@${week_start_str}-{week_end_str}")
+    print("WRITE: "+f"{pdf_fname}$@${week_start_str}-{week_end_str}")
 
     with open("processed.txt", "a") as f:
-        f.write(f"{curr_link}$@${week_start_str}-{week_end_str}\n")
+        f.write(f"{pdf_fname}$@${week_start_str}-{week_end_str}\n")
 
     
     print(cleaned_shifts)
