@@ -24,7 +24,6 @@ cookies={
   "d-s": os.environ.get("SLACK_DS").strip()
 }
 
-
 COLUMN_DAYS = {
     1: "Monday",
     2: "Tuesday",
@@ -47,15 +46,19 @@ def process_emails():
   mail.select('"Slack Emails"')
   print("Connected to mailbox.")
 
+  
+  status, messages = mail.search(None,'ALL')
 
-  status, messages = mail.search(None,'(HEADER Subject "jsaenz14 mentioned everyone")')
-  print("Status:", status)
+  print("status:", status)
 
   if status != "OK":
     print("No matching emails found.")
+    mail.logout()
     return
 
   os.makedirs("downloaded_pdfs", exist_ok=True)
+  all_links = []
+  
 
   for num in messages[0].split():
     status, msg_data = mail.fetch(num, "(RFC822)")
@@ -103,7 +106,7 @@ def process_emails():
  
 
         
-  all_links = set(pdf_links + slack_pdf_links)
+    all_links.extend(set(pdf_links + slack_pdf_links))
   print(all_links)
 
   pdfs = []
@@ -163,6 +166,14 @@ def process_emails():
 
     
   for pdf_fname in pdfs:
+    print(f"Processing PDF: {pdf_fname}")
+    print(f"Processing PDF: {pdf_fname}")
+    print(f"Processing PDF: {pdf_fname}")
+    curr_link = None
+    for i in all_links:
+      if pdf_fname in i:
+        curr_link = i
+        break
     print("Pulling schedule from PDF:", pdf_fname)
 
 
@@ -230,6 +241,7 @@ def process_emails():
                 break
 
               for col_index, cell_value in enumerate(target_row):
+                
                 if (
                     col_index in COLUMN_DAYS
                     and cell_value
@@ -239,6 +251,9 @@ def process_emails():
                   shift_time = cell_value.strip().replace("\n", " ")
                   if "UCENT" not in shift_time:
                     print(f"  {day_name}: {shift_time}")
+
+                    if day_name not in shifts:
+                      shifts[day_name] = []
 
                     shifts[day_name].append(shift_time.split("-"))
 
@@ -279,11 +294,12 @@ def process_emails():
     cleaned_shifts["week_start"] = week_start_str
     cleaned_shifts["week_end"] = week_end_str
 
-    with open("processed.txt", "a") as f:
-      for pdf_fname in pdfs:
-        f.write(f"{link}$@${week_start_str}-{week_end_str}\n")
+    print("WRITE: "+f"{curr_link}$@${week_start_str}-{week_end_str}")
 
-    mail.logout() 
+    with open("processed.txt", "a") as f:
+        f.write(f"{curr_link}$@${week_start_str}-{week_end_str}\n")
+
+    
     print(cleaned_shifts)
 
     schedule_shifts(cleaned_shifts)
@@ -291,6 +307,7 @@ def process_emails():
     shifts.clear()
     shift_times.clear()
     os.remove(pdf_path)
+  mail.logout() 
 
 
 
