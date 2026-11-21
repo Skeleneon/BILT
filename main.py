@@ -249,13 +249,26 @@ def process_emails():
                 ):
                   day_name = COLUMN_DAYS[col_index]
                   shift_time = cell_value.strip().replace("\n", " ")
-                  if "UCENT" not in shift_time:
+
+
+                  if "UCENT" not in shift_time and ("AM-" in shift_time or "PM-" in shift_time):
                     print(f"  {day_name}: {shift_time}")
 
                     if day_name not in shifts:
                       shifts[day_name] = []
 
                     shifts[day_name].append(shift_time.split("-"))
+
+                    
+                  elif "UCENT" in shift_time and ("AM-" in shift_time or "PM-" in shift_time):
+                    shift_time = shift_time.replace("2-UCENT 267", "").strip()
+                    print(f"  {day_name}: {shift_time}")
+
+                    if day_name not in shifts:
+                      
+                      shifts[day_name] = []
+
+                    shifts[day_name].append(shift_time.split("-")) 
 
               current_row_idx += 1
 
