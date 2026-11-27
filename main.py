@@ -449,9 +449,17 @@ def schedule_shifts(shift):
         end_time = datetime.strptime(
             f"{date_str} {shift[1]}", "%m/%d/%Y %I:%M %p"
         )
+        total_time = (datetime.strptime(shift[1],"%I:%M %p") - datetime.strptime(shift[0],"%I:%M %p")).total_seconds()/3600
+        print("shift is "+str(total_time)+" hours long")
+
+        breaktime=""
+        if 6.5 <= total_time < 8.5:
+          breaktime=" (30 min break)"
+        elif total_time == 9:
+          breaktime=" (1 hr break)"
 
         add_to_calendar(
-            event_name="Work",
+            event_name="Work"+breaktime,
             event_location="Downtown Phoenix Campus - UCENT 267",
             event_description="Automated calendar sync for work shifts.",
             event_start_time=start_time,
