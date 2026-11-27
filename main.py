@@ -420,8 +420,8 @@ def delete_work_events_in_range(start_date_str, end_date_str, query_name="Work")
     print(f"Deleted event: '{summary}' (Scheduled for {start_time})")
 
 
-def schedule_shifts(shift):
-  shifts = shift
+def schedule_shifts(shifts):
+  
   day_offsets = {
         "Monday": 0,
         "Tuesday": 1,
@@ -432,13 +432,36 @@ def schedule_shifts(shift):
         "Sunday": 6,
     }
 
-  # Parse the base week start date once
+  breaktimes={}
+  for times in shifts.items():
+    if type(times[1])!=list:
+      continue
+    total_time = 0
+    breaktime=""
+    for period in times[1]:
+      total_time += (datetime.strptime(period[1],"%I:%M %p") - datetime.strptime(period[0],"%I:%M %p")).total_seconds()/3600
+
+    if 6.5 <= total_time < 8.5:
+      breaktime=" (30 min break)"
+    elif total_time == 9:
+      breaktime=" (1 hr break)"
+    elif total_time > 9:
+      breaktime=" (OVER 9 HOURS)"
+    
+    
+    if breaktime:
+      breaktimes[times[0]]=breaktime
+  print("Breaktimes: "+str(breaktimes))
+
+  
   week_start_date = datetime.strptime(shifts["week_start"], "%m/%d/%Y")
 
   delete_work_events_in_range(shifts["week_start"], shifts["week_end"])
   for day, offset in day_offsets.items():
     if shifts.get(day):
-      # Calculate the exact date for this specific day of the week
+
+      breaktime = breaktimes.get(day,"")
+
       current_day_date = week_start_date + timedelta(days=offset)
       date_str = current_day_date.strftime("%m/%d/%Y")
 
@@ -449,14 +472,7 @@ def schedule_shifts(shift):
         end_time = datetime.strptime(
             f"{date_str} {shift[1]}", "%m/%d/%Y %I:%M %p"
         )
-        total_time = (datetime.strptime(shift[1],"%I:%M %p") - datetime.strptime(shift[0],"%I:%M %p")).total_seconds()/3600
-        print("shift is "+str(total_time)+" hours long")
-
-        breaktime=""
-        if 6.5 <= total_time < 8.5:
-          breaktime=" (30 min break)"
-        elif total_time == 9:
-          breaktime=" (1 hr break)"
+        
 
         add_to_calendar(
             event_name="Work"+breaktime,
